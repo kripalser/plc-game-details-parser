@@ -2,7 +2,6 @@
 
 const path = require('path');
 const fs = require('fs');
-const chalk = require('chalk');
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 const yaml = require('js-yaml');
@@ -12,12 +11,12 @@ function gameDetailsParser() {
     const readFilePath = process.argv[2];
 
     if (readFilePath === undefined || path.extname(readFilePath) !== '.html') {
-        console.log(chalk.yellow('Please provide a path to an HTML file'));
+        console.warn('\x1b[33m%s\x1b[0m', 'warning: Please provide a path to an HTML file');
         return;
     }
 
     if (fs.existsSync(readFilePath) === false) {
-        console.log(chalk.red('This file does not exist'));
+        console.error('\x1b[31m%s\x1b[0m', 'error: This file does not exist');
         return;
     }
 
