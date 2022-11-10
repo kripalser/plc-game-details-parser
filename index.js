@@ -5,6 +5,7 @@ const fs = require('fs');
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 const yaml = require('js-yaml');
+const slugify = require('slugify');
 const { nextUntil, nextAll } = require('./utils');
 
 function gameDetailsParser() {
@@ -20,7 +21,6 @@ function gameDetailsParser() {
         return;
     }
 
-    const writeFilePath = `${path.dirname(readFilePath)}/${path.basename(readFilePath).replace(path.extname(readFilePath), '.yml')}`;
     let data = {};
     let metaData = {};
 
@@ -64,7 +64,7 @@ function gameDetailsParser() {
             data.text.advanced = [];
             data.text.play = addItems(play);
 
-            fs.writeFile(writeFilePath, yaml.dump(data, { lineWidth: -1 }), (error) => {
+            fs.writeFile(`${path.dirname(readFilePath)}/${slugify(metaData.name, { lower: true, strict: true })}.yml`, yaml.dump(data, { lineWidth: -1 }), (error) => {
                 if (error) {
                     console.error(error);
                 }

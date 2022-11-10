@@ -5,6 +5,7 @@
   "license": "MIT",
   "devDependencies": {
     "js-yaml": "^4.1.0",
-    "jsdom": "^20.0.2"
+    "jsdom": "^20.0.2",
+    "slugify": "^1.6.5"
   }
 }
