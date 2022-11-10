@@ -41,7 +41,7 @@ function gameDetailsParser() {
 
             // Meta data
             for (const item of meta) {
-                const parts = item.textContent.split(': ');
+                const parts = item.textContent.split(/: (.*)/s); // Get only first instance
 
                 metaData[parts[0].replace('Game', '').split(/(?=[A-Z])/).join('_').toLowerCase()] = parts[1];
             }
