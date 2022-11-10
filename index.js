@@ -11,7 +11,7 @@ const { nextUntil, nextAll } = require('./utils');
 function gameDetailsParser() {
     const readFilePath = process.argv[2];
 
-    if (readFilePath === undefined || path.extname(readFilePath) !== '.html') {
+    if (readFilePath === undefined || !(/^\.html?$/).test(path.extname(readFilePath))) {
         console.warn('\x1b[33m%s\x1b[0m', 'warning: Please provide a path to an HTML file');
         return;
     }

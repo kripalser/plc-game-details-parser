@@ -13,6 +13,8 @@ const nextUntil = (elem, selector, includeFirst = false, filter) => {
     // Setup siblings array
     var siblings = [];
 
+    if (elem === undefined) return siblings;
+
     if (includeFirst === false) {
         // Get the next sibling element
         elem = elem.nextElementSibling;
@@ -46,6 +48,8 @@ const nextUntil = (elem, selector, includeFirst = false, filter) => {
 const nextAll = (elem) => {
     const nextElements = [];
     let nextElement = elem;
+
+    if (elem === undefined) return nextElements;
 
     while (nextElement.nextElementSibling) {
         nextElements.push(nextElement.nextElementSibling);
