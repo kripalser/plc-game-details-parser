@@ -61,6 +61,7 @@ function gameDetailsParser() {
             data.text.symbols = addSymbols(symbols);
             data.text.test = addItems(test);
             data.text.advantages = addItems(advantages);
+            data.text.advanced = [];
             data.text.play = addItems(play);
 
             fs.writeFile(writeFilePath, yaml.dump(data, { lineWidth: -1 }), (error) => {
