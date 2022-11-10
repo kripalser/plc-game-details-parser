@@ -48,8 +48,8 @@ function gameDetailsParser() {
 
             data.name = metaData.name;
             data.title = metaData.title;
-            data.serverId = `${metaData.provider.toLowerCase()}-${metaData.name.replace(/\s/g, '-').toLowerCase()}`;
-            data.gameKey = `${metaData.provider.toLowerCase()}_${metaData.name.replace(/\s/g, '_').toLowerCase()}`;
+            data.serverId = `${slugify(metaData.provider, { lower: true, strict: true })}-${slugify(metaData.name, { lower: true, strict: true })}`;
+            data.gameKey = `${slugify(metaData.provider, { replacement: '_', lower: true, strict: true })}_${slugify(metaData.name, { replacement: '_', lower: true, strict: true })}`;
             data.meta_description = metaData.meta_description;
             data.version = 2;
             data.text = {};
