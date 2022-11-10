@@ -97,7 +97,7 @@ function addSymbols(items) {
         if (index % 2 === 0) {
             // Even elements are titles
             result.push({
-                key: item.textContent.replace(/\s/g, '').toLowerCase(),
+                key: slugify(item.textContent, { replacement: '', lower: true, strict: true }),
                 title: item.textContent,
             });
             titleIndex++;
