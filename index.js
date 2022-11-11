@@ -1,32 +1,43 @@
 'use strict';
 
-const path = require('path');
+const axios = require('axios');
+const chalk = require('chalk');
 const fs = require('fs');
 const jsdom = require('jsdom');
-const { JSDOM } = jsdom;
-const yaml = require('js-yaml');
+const path = require('path');
 const slugify = require('slugify');
+const yaml = require('js-yaml');
+
+const { JSDOM } = jsdom;
+const { gameProviders } = require('./game-providers');
 const { nextUntil, nextAll } = require('./utils');
+
+require('dotenv').config();
 
 function gameDetailsParser() {
     const readFilePath = process.argv[2];
 
     if (readFilePath === undefined || !(/^\.html?$/).test(path.extname(readFilePath))) {
-        console.warn('\x1b[33m%s\x1b[0m', 'warning: Please provide a path to an HTML file');
+        console.log(`${chalk.black.bgRed(' ERROR ')} ${chalk.red('Please provide a path to an HTML file')}`);
         return;
     }
 
     if (fs.existsSync(readFilePath) === false) {
-        console.error('\x1b[31m%s\x1b[0m', 'error: This file does not exist');
+        console.log(`${chalk.black.bgRed(' ERROR ')} ${chalk.red('This file does not exist')}`);
         return;
     }
 
     let data = {};
     let metaData = {};
+    let provider = {};
+
+    console.log(`Reading file ${chalk.bold(path.basename(readFilePath))}`);
 
     JSDOM
         .fromFile(readFilePath)
         .then((dom) => {
+            console.log('Parsing file');
+
             const document = dom.window.document;
             const meta = nextUntil(document.querySelector('p'), 'h1', true);
             const intro = nextUntil(document.querySelector('h1'), 'h2');
@@ -46,10 +57,18 @@ function gameDetailsParser() {
                 metaData[parts[0].replace('Game', '').split(/(?=[A-Z])/).join('_').toLowerCase()] = parts[1];
             }
 
+            provider = gameProviders.find((item) => item.id === slugify(metaData.provider, { replacement: '', lower: true, strict: true }));
+
+            if (!provider) {
+                console.log(chalk.red(`Provider ${metaData.provider} couldn't be found in gameProviders`));
+                return;
+            }
+
             data.name = metaData.name;
             data.title = metaData.title;
-            data.serverId = `${slugify(metaData.provider, { lower: true, strict: true })}-${slugify(metaData.name, { lower: true, strict: true })}`;
-            data.gameKey = `${slugify(metaData.provider, { replacement: '_', lower: true, strict: true })}_${slugify(metaData.name, { replacement: '_', lower: true, strict: true })}`;
+
+            data.serverId = provider.prefix.urlSlug + (provider.prefix.urlSlug !== '' ? '-' : '') +  slugify(metaData.name, { lower: true, strict: true }); // Fallback
+            data.gameKey = provider.prefix.serverId + (provider.prefix.serverId !== '' ? '_' : '') + slugify(metaData.name, { replacement: '', lower: true, strict: true }); // Fallback
             data.meta_description = metaData.meta_description;
             data.version = 2;
             data.text = {};
@@ -64,11 +83,24 @@ function gameDetailsParser() {
             data.text.advanced = [];
             data.text.play = addItems(play);
 
-            fs.writeFile(`${path.dirname(readFilePath)}/${slugify(metaData.name, { lower: true, strict: true })}.yml`, yaml.dump(data, { lineWidth: -1 }), (error) => {
-                if (error) {
-                    console.error(error);
-                }
-            });
+            getGame(provider, data.name)
+                .then((game) => {
+                    if (game) {
+                        data.serverId = game.urlSlug;
+                        data.gameKey = game.serverId;
+                    }
+
+                    console.log(`Writing file ${chalk.bold(slugify(metaData.name, { lower: true, strict: true }) + '.yml')}`);
+
+                    fs.writeFile(`${path.dirname(readFilePath)}/${slugify(metaData.name, { lower: true, strict: true })}.yml`, yaml.dump(data, { lineWidth: -1 }), (error) => {
+                        if (error) {
+                            console.log(chalk.red(error));
+                        } else {
+                            console.log(`${chalk.black.bgGreen(' DONE ')} ${chalk.green('File written successfully')}`);
+                        }
+                    });
+                })
+                .catch((error) => console.log(chalk.red(error)));
         });
 }
 
@@ -107,6 +139,69 @@ function addSymbols(items) {
     }
 
     return result;
+}
+
+function getGame(provider, gameName, page = 0) {
+    const request = {
+        url: process.env.GAMES_API,
+        params: {
+            vendor: provider.dbName,
+            mobile: false,
+            orderBy: 'name',
+            sortOrder: 'asc',
+            page,
+        },
+    };
+
+    if (!request.url) {
+        return Promise.reject('GAMES_API variable in .env is missing or empty');
+    }
+
+    if (!request.params.vendor) {
+        return Promise.reject(`Provider with ID of ${chalk.bold(provider.id)} couldn't be found in gameProviders`);
+    }
+
+    page === 0 && console.log(`Searching for ${chalk.bold(gameName)} game in ${axios.getUri({ url: request.url, params: request.params})}`);
+    process.stdout.clearLine();
+    process.stdout.cursorTo(0);
+    process.stdout.write(`Checking page ${page}...`);
+
+    return axios
+        .get(request.url, { params: request.params })
+        .then((response) => {
+            const games = response.data;
+
+            if (games.length < 2) {
+                // It's nothing really empty because of `loadmore`
+                process.stdout.clearLine();
+                process.stdout.cursorTo(0);
+                console.log(`${chalk.black.bgYellow(' WARNING ')} ${chalk.yellow(`No games of ${provider.name} were found`)}`);
+                return null;
+            }
+
+            const game = games.find((item) => {
+                return item.type === 'game' && slugify(item.name, { replacement: '', lower: true, strict: true }) === slugify(gameName, { replacement: '', lower: true, strict: true });
+            });
+
+            if (game) {
+                process.stdout.clearLine();
+                process.stdout.cursorTo(0);
+                console.log(`${chalk.black.bgGreen(' FOUND ')} ${chalk.green(game.name)}`);
+
+                return game;
+            } else if (games.find((item) => item.type === 'loadmore').items > 0) {
+                page++;
+                return getGame(provider, gameName, page);
+            } else {
+                process.stdout.clearLine();
+                process.stdout.cursorTo(0);
+                console.log(`${chalk.black.bgRed(' NOT FOUND ')} ${chalk.red(`serverId and gameKey for this game will be generated automatically`)}`);
+                return null;
+            }
+        })
+        .catch((error) => {
+            console.error(chalk.red(error));
+        });
 }
 
 gameDetailsParser();
