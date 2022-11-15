@@ -38,7 +38,7 @@ function gameDetailsParser() {
         .then((dom) => {
             console.log('Parsing file');
 
-            const document = dom.window.document;
+            const document = removeEmptyNodes(dom.window.document);
             const meta = nextUntil(document.querySelector('p'), 'h1', true);
             const intro = nextUntil(document.querySelector('h1'), 'h2');
             const expect = nextUntil(document.querySelector('h2'), 'ul');
@@ -102,6 +102,19 @@ function gameDetailsParser() {
                 })
                 .catch((error) => console.log(chalk.red(error)));
         });
+}
+
+function removeEmptyNodes(document) {
+    const nodes = document.querySelector('body').childNodes;
+
+    // Looping backwards to avoid the index shifting after removing a node
+    for (let i = nodes.length - 1; i >= 0; i--) {
+        if (nodes[i].textContent.trim() === '') {
+            nodes[i].parentNode.removeChild(nodes[i]);
+        }
+    }
+
+    return document;
 }
 
 function addCharacteristics(list) {
