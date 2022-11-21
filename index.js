@@ -34,7 +34,7 @@ function gameDetailsParser() {
     console.log(`Reading file ${chalk.bold(path.basename(readFilePath))}`);
 
     JSDOM
-        .fromFile(readFilePath)
+        .fromFile(readFilePath, { contentType: 'text/html; charset=utf-8' })
         .then((dom) => {
             console.log('Parsing file');
 
