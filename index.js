@@ -112,10 +112,20 @@ function removeEmptyNodes(parent) {
 
     // Looping backwards to avoid the index shifting after removing a node
     for (let i = nodes.length - 1; i >= 0; i--) {
-        removeEmptyNodes(nodes[i]);
+        const node = nodes[i];
 
-        if (nodes[i].textContent.trim() === '') {
-            nodes[i].parentNode.removeChild(nodes[i]);
+        removeEmptyNodes(node);
+
+        // Omit empty links keeping full content
+        if (node.tagName === 'A' && node.hasAttribute('href') === false) {
+            // https://plainjs.com/javascript/manipulation/unwrap-a-dom-element-35/
+            while (node.firstChild) {
+                node.parentNode.insertBefore(node.firstChild, node);
+            }
+        }
+
+        if (node.textContent.trim() === '') {
+            node.parentNode.removeChild(node);
         }
     }
 }
@@ -162,6 +172,7 @@ function addSymbols(items) {
 }
 
 function getGame(provider, gameName, page = 0) {
+    return Promise.resolve(null); // Todo: temporary
     const request = {
         url: process.env.GAMES_API,
         params: {
