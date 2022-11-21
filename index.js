@@ -38,7 +38,10 @@ function gameDetailsParser() {
         .then((dom) => {
             console.log('Parsing file');
 
-            const document = removeEmptyNodes(dom.window.document);
+            const document = dom.window.document;
+
+            removeEmptyNodes(document.querySelector('body'));
+
             const meta = nextUntil(document.querySelector('p'), 'h1', true);
             const intro = nextUntil(document.querySelector('h1'), 'h2');
             const expect = nextUntil(document.querySelector('h2'), 'ul');
@@ -104,17 +107,17 @@ function gameDetailsParser() {
         });
 }
 
-function removeEmptyNodes(document) {
-    const nodes = document.querySelector('body').childNodes;
+function removeEmptyNodes(parent) {
+    const nodes = parent.childNodes;
 
     // Looping backwards to avoid the index shifting after removing a node
     for (let i = nodes.length - 1; i >= 0; i--) {
+        removeEmptyNodes(nodes[i]);
+
         if (nodes[i].textContent.trim() === '') {
             nodes[i].parentNode.removeChild(nodes[i]);
         }
     }
-
-    return document;
 }
 
 function addCharacteristics(list) {
@@ -130,6 +133,10 @@ function addCharacteristics(list) {
 
 function addItems(items) {
     return items.map((item) => {
+        if (item.tagName === 'OL' || item.tagName === 'UL') {
+            return addItems([...item.childNodes]);
+        }
+
         return item.innerHTML;
     });
 }
