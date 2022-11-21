@@ -10,7 +10,7 @@ const yaml = require('js-yaml');
 
 const { JSDOM } = jsdom;
 const { gameProviders } = require('./game-providers');
-const { nextUntil, nextAll } = require('./utils');
+const { nextUntil, nextAll, unescapeHTML } = require('./utils');
 
 require('dotenv').config();
 
@@ -147,7 +147,7 @@ function addItems(items) {
             return addItems([...item.childNodes]);
         }
 
-        return item.innerHTML;
+        return unescapeHTML(item.innerHTML);
     });
 }
 
@@ -172,7 +172,6 @@ function addSymbols(items) {
 }
 
 function getGame(provider, gameName, page = 0) {
-    return Promise.resolve(null); // Todo: temporary
     const request = {
         url: process.env.GAMES_API,
         params: {

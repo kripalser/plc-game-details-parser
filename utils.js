@@ -62,4 +62,14 @@ const nextAll = (elem) => {
     return siblings;
 };
 
-module.exports = { nextUntil, nextAll };
+const unescapeHTML = (htmlString) => {
+    return htmlString
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, '\'')
+        .replace(/&amp;/g, '&')
+        .replace(/\s*&nbsp;\s*/g, ' '); // Merge extra spaces, not sure if it should be handled here though
+};
+
+module.exports = { nextUntil, nextAll, unescapeHTML };
