@@ -2,135 +2,129 @@
 
 const axios = require('axios');
 const chalk = require('chalk');
+const { decode } = require('html-entities');
 const fs = require('fs');
 const jsdom = require('jsdom');
+const minify = require('html-minifier').minify;
 const path = require('path');
 const slugify = require('slugify');
 const yaml = require('js-yaml');
 
 const { JSDOM } = jsdom;
 const { gameProviders } = require('./game-providers');
-const { nextUntil, nextAll, unescapeHTML } = require('./utils');
+const { nextUntil, nextAll, removeEmptyLinks } = require('./utils');
 
 require('dotenv').config();
 
-function gameDetailsParser() {
-    const readFilePath = process.argv[2];
+const filePath = process.argv[2];
 
-    if (readFilePath === undefined || !(/^\.html?$/).test(path.extname(readFilePath))) {
+function readFile() {
+    if (filePath === undefined || !(/^\.html?$/).test(path.extname(filePath))) {
         console.log(`${chalk.black.bgRed(' ERROR ')} ${chalk.red('Please provide a path to an HTML file')}`);
         return;
     }
 
-    if (fs.existsSync(readFilePath) === false) {
-        console.log(`${chalk.black.bgRed(' ERROR ')} ${chalk.red('This file does not exist')}`);
-        return;
-    }
+    console.log(`Reading file ${chalk.bold(path.basename(filePath))}`);
 
+    fs.readFile(filePath, 'utf8', (error, data) => {
+        if (error) {
+            console.log(`${chalk.black.bgRed(' ERROR ')} ${chalk.red('Something went wrong, see details below')}\n${chalk.red(error)}`);
+            return;
+        }
+
+        parseHTML(data);
+    });
+}
+
+function parseHTML(html) {
+    const { document } = (new JSDOM(cleanHTML(html))).window;
+    createDataObject(document);
+}
+
+function cleanHTML(html) {
+    // Remove all non-breaking spaces before cleaning the HTML
+    html = html.replace(/&nbsp;/g, ' ');
+
+    return minify(html, {
+        collapseWhitespace: true,
+        removeEmptyElements: true,
+    });
+}
+
+function createDataObject(document) {
     let data = {};
     let metaData = {};
     let provider = {};
 
-    console.log(`Reading file ${chalk.bold(path.basename(readFilePath))}`);
+    const meta = nextUntil(document.querySelector('p'), 'h1', true);
+    const intro = nextUntil(document.querySelector('h1'), 'h2');
+    const expect = nextUntil(document.querySelector('h2'), 'ul');
+    const characteristics = document.querySelector('ul');
+    const played = nextUntil(document.querySelectorAll('h2')[1], 'h2');
+    const odds = nextUntil(document.querySelectorAll('h2')[2], 'h2');
+    const symbols = nextUntil(document.querySelectorAll('h2')[3], 'h2');
+    const test = nextUntil(document.querySelectorAll('h2')[4], 'h2');
+    const advantages = nextUntil(document.querySelectorAll('h2')[5], 'h2');
+    const play = nextAll(document.querySelectorAll('h2')[6]);
 
-    JSDOM
-        .fromFile(readFilePath, { contentType: 'text/html; charset=utf-8' })
-        .then((dom) => {
-            console.log('Parsing file');
+    // Meta data
+    for (const item of meta) {
+        const parts = item.textContent.split(/: (.*)/s); // Get only first instance
 
-            const document = dom.window.document;
-
-            removeEmptyNodes(document.querySelector('body'));
-
-            const meta = nextUntil(document.querySelector('p'), 'h1', true);
-            const intro = nextUntil(document.querySelector('h1'), 'h2');
-            const expect = nextUntil(document.querySelector('h2'), 'ul');
-            const characteristics = document.querySelector('ul');
-            const played = nextUntil(document.querySelectorAll('h2')[1], 'h2');
-            const odds = nextUntil(document.querySelectorAll('h2')[2], 'h2');
-            const symbols = nextUntil(document.querySelectorAll('h2')[3], 'h2');
-            const test = nextUntil(document.querySelectorAll('h2')[4], 'h2');
-            const advantages = nextUntil(document.querySelectorAll('h2')[5], 'h2');
-            const play = nextAll(document.querySelectorAll('h2')[6]);
-
-            // Meta data
-            for (const item of meta) {
-                const parts = item.textContent.split(/: (.*)/s); // Get only first instance
-
-                metaData[parts[0].replace('Game', '').split(/(?=[A-Z])/).join('_').toLowerCase()] = parts[1];
-            }
-
-            provider = gameProviders.find((item) => item.id === slugify(metaData.provider, { replacement: '', lower: true, strict: true }));
-
-            if (!provider) {
-                console.log(chalk.red(`Provider ${metaData.provider} couldn't be found in gameProviders`));
-                return;
-            }
-
-            data.name = metaData.name;
-            data.title = metaData.title;
-
-            data.serverId = provider.prefix.urlSlug + (provider.prefix.urlSlug !== '' ? '-' : '') +  slugify(metaData.name, { lower: true, strict: true }); // Fallback
-            data.gameKey = provider.prefix.serverId + (provider.prefix.serverId !== '' ? '_' : '') + slugify(metaData.name, { replacement: '', lower: true, strict: true }); // Fallback
-            data.meta_description = metaData.meta_description;
-            data.version = 2;
-            data.text = {};
-            data.text.intro = addItems(intro);
-            data.text.expect = addItems(expect);
-            data.text.characteristics = addCharacteristics(characteristics);
-            data.text.played = addItems(played);
-            data.text.odds = addItems(odds);
-            data.text.symbols = addSymbols(symbols);
-            data.text.test = addItems(test);
-            data.text.advantages = addItems(advantages);
-            data.text.advanced = [];
-            data.text.play = addItems(play);
-
-            getGame(provider, data.name)
-                .then((game) => {
-                    if (game) {
-                        data.serverId = game.urlSlug;
-                        data.gameKey = game.serverId;
-                    }
-
-                    console.log(`Writing file ${chalk.bold(slugify(metaData.name, { lower: true, strict: true }) + '.yml')}`);
-
-                    fs.writeFile(`${path.dirname(readFilePath)}/${slugify(metaData.name, { lower: true, strict: true })}.yml`, yaml.dump(data, { lineWidth: -1 }), (error) => {
-                        if (error) {
-                            console.log(chalk.red(error));
-                        } else {
-                            console.log(`${chalk.black.bgGreen(' DONE ')} ${chalk.green('File written successfully')}`);
-                        }
-                    });
-                })
-                .catch((error) => console.log(chalk.red(error)));
-        });
-}
-
-function removeEmptyNodes(parent) {
-    const nodes = parent.childNodes;
-
-    // Looping backwards to avoid the index shifting after removing a node
-    for (let i = nodes.length - 1; i >= 0; i--) {
-        const node = nodes[i];
-
-        removeEmptyNodes(node);
-
-        // Omit empty links keeping full content
-        if (node.tagName === 'A' && node.hasAttribute('href') === false) {
-            // https://plainjs.com/javascript/manipulation/unwrap-a-dom-element-35/
-            while (node.firstChild) {
-                node.parentNode.insertBefore(node.firstChild, node);
-            }
-        }
-
-        if (node.textContent.trim() === '') {
-            node.parentNode.removeChild(node);
-        }
+        metaData[parts[0].replace('Game', '').split(/(?=[A-Z])/).join('_').toLowerCase()] = parts[1];
     }
+
+    provider = gameProviders.find((item) => item.id === slugify(metaData.provider, { replacement: '', lower: true, strict: true }));
+
+    if (!provider) {
+        console.log(chalk.red(`Provider ${metaData.provider} couldn't be found in gameProviders`));
+        return;
+    }
+
+    data.name = metaData.name;
+    data.title = metaData.title;
+
+    data.serverId = provider.prefix.urlSlug + (provider.prefix.urlSlug !== '' ? '-' : '') +  slugify(metaData.name, { lower: true, strict: true }); // Fallback
+    data.gameKey = provider.prefix.serverId + (provider.prefix.serverId !== '' ? '_' : '') + slugify(metaData.name, { replacement: '', lower: true, strict: true }); // Fallback
+    data.meta_description = metaData.meta_description;
+    data.version = 2;
+    data.text = {};
+    data.text.intro = parseItems(intro);
+    data.text.expect = parseItems(expect);
+    data.text.characteristics = parseCharacteristics(characteristics);
+    data.text.played = parseItems(played);
+    data.text.odds = parseItems(odds);
+    data.text.symbols = parseSymbols(symbols);
+    data.text.test = parseItems(test);
+    data.text.advantages = parseItems(advantages);
+    data.text.advanced = [];
+    data.text.play = parseItems(play);
+
+    getGame(provider, data.name)
+        .then((game) => {
+            if (game) {
+                data.serverId = game.urlSlug;
+                data.gameKey = game.serverId;
+            }
+
+            writeFile(metaData, data);
+        })
+        .catch((error) => console.log(chalk.red(error)));
 }
 
-function addCharacteristics(list) {
+function writeFile(metaData, data) {
+    console.log(`Writing file ${chalk.bold(slugify(metaData.name, { lower: true, strict: true }) + '.yml')}`);
+
+    fs.writeFile(`${path.dirname(filePath)}/${slugify(metaData.name, { lower: true, strict: true })}.yml`, yaml.dump(data, { lineWidth: -1 }), (error) => {
+        if (error) {
+            console.log(chalk.red(error));
+        } else {
+            console.log(`${chalk.black.bgGreen(' DONE ')} ${chalk.green('File written successfully')}`);
+        }
+    });
+}
+
+function parseCharacteristics(list) {
     let result = [];
 
     for (const item of list.querySelectorAll('li')) {
@@ -141,17 +135,19 @@ function addCharacteristics(list) {
     return result;
 }
 
-function addItems(items) {
+function parseItems(items) {
     return items.map((item) => {
         if (item.tagName === 'OL' || item.tagName === 'UL') {
-            return addItems([...item.childNodes]);
+            return parseItems([...item.childNodes]);
         }
 
-        return unescapeHTML(item.innerHTML);
+        removeEmptyLinks(item);
+
+        return decode(item.innerHTML);
     });
 }
 
-function addSymbols(items) {
+function parseSymbols(items) {
     let result = [];
     let titleIndex = 0;
 
@@ -234,4 +230,4 @@ function getGame(provider, gameName, page = 0) {
         });
 }
 
-gameDetailsParser();
+readFile();

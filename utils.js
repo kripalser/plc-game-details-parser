@@ -62,14 +62,19 @@ const nextAll = (elem) => {
     return siblings;
 };
 
-const unescapeHTML = (htmlString) => {
-    return htmlString
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, '\'')
-        .replace(/&amp;/g, '&')
-        .replace(/\s*&nbsp;\s*/g, ' '); // Merge extra spaces, not sure if it should be handled here though
+const removeEmptyLinks = (elem) => {
+    for (const node of elem.childNodes) {
+        if (node.tagName === 'A' && node.hasAttribute('href') === false) {
+            // https://plainjs.com/javascript/manipulation/unwrap-a-dom-element-35/
+            while (node.firstChild) {
+                node.parentNode.insertBefore(node.firstChild, node);
+            }
+
+            node.parentNode.removeChild(node);
+        }
+    }
+
+    return elem;
 };
 
-module.exports = { nextUntil, nextAll, unescapeHTML };
+module.exports = { nextUntil, nextAll, removeEmptyLinks };
