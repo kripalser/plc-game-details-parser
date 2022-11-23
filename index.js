@@ -16,6 +16,19 @@ const { nextUntil, nextAll, removeEmptyLinks } = require('./utils');
 
 require('dotenv').config();
 
+// https://stackoverflow.com/a/69409483
+const argv = (key) => {
+    // Return `true` if the key exists and a value is defined
+    if (process.argv.includes(`--${key}`)) return true;
+
+    const value = process.argv.find((element) => element.startsWith(`--${key}=`));
+
+    // Return `null` if the key does not exist and a value is not defined
+    if (!value) return null;
+
+    return value.replace(`--${key}=`, '');
+}
+
 const filePath = process.argv[2];
 
 function readFile() {
@@ -168,6 +181,9 @@ function parseSymbols(items) {
 }
 
 function getGame(provider, gameName, page = 0) {
+    // Skip the request, e.g. for testing purposes
+    if (argv('skip-api') === true) return Promise.resolve(null);
+
     const request = {
         url: process.env.GAMES_API,
         params: {
